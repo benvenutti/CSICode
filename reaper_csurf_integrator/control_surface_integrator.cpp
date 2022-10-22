@@ -244,7 +244,7 @@ static void GetWidgetNameAndModifiers(string line, shared_ptr<ActionTemplate> ac
             else if(tokens[i] == "Nudge")
                 modifierManager.SetNudge(true);
             else if(tokens[i] == "Zoom")
-                modifierManager.SetNudge(true);
+                modifierManager.SetZoom(true);
             else if(tokens[i] == "Scrub")
                 modifierManager.SetScrub(true);
             
@@ -984,6 +984,11 @@ static void ProcessZoneFile(string filePath, ZoneManager* zoneManager, vector<Na
                         
                         GetWidgetNameAndModifiers(tokens[0], currentActionTemplate);
 
+                        // GAW TBD -- check for wildcards
+                        
+                        //zoneManager->GetNumChannels();
+                        
+                        
                         actionTemplatesDictionary[currentActionTemplate->widgetName][currentActionTemplate->modifier].push_back(currentActionTemplate);
                     }
                 }
@@ -1602,6 +1607,7 @@ void Manager::InitActionsDictionary()
     actions_["ToggleEnableFocusedFXMapping"] =      new ToggleEnableFocusedFXMapping();
     actions_["ToggleEnableFocusedFXParamMapping"] = new ToggleEnableFocusedFXParamMapping();
     actions_["GoSelectedTrackFX"] =                 new GoSelectedTrackFX();
+    actions_["GoMasterTrack"] =                     new GoMasterTrack();
     actions_["GoTrackSend"] =                       new GoTrackSend();
     actions_["GoTrackReceive"] =                    new GoTrackReceive();
     actions_["GoTrackFXMenu"] =                     new GoTrackFXMenu();
@@ -2738,7 +2744,7 @@ vector<shared_ptr<ActionContext>> &Zone::GetActionContexts(Widget* widget)
     bool isTouched = false;
     bool isToggled = false;
     
-    if(GetNavigator()->GetIsNavigatorTouched())
+    if(widget->GetSurface()->GetIsChannelTouched(widget->GetChannelNumber()))
         isTouched = true;
 
     if(widget->GetSurface()->GetIsChannelToggled(widget->GetChannelNumber()))
@@ -2902,7 +2908,11 @@ void OSC_FeedbackProcessor::ForceValue(string value)
 void OSC_IntFeedbackProcessor::ForceValue(double value)
 {
     lastDoubleValue_ = value;
-    surface_->SendOSCMessage(this, oscAddress_, (int)value);
+    
+    if (surface_->IsX32() && oscAddress_.find("/-stat/selidx") != string::npos && value != 0.0)
+        surface_->SendOSCMessage(this, "/-stat/selidx", widget_->GetChannelNumber() - 1);
+    else
+        surface_->SendOSCMessage(this, oscAddress_, (int)value);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3334,6 +3344,39 @@ void ZoneManager::AdjustSelectedTrackFXMenuBank(int amount)
         GetSurface()->GetPage()->SignalSelectedTrackFXMenuBank(GetSurface(), amount);
     
     AdjustSelectedTrackFXMenuOffset(amount);
+}
+
+void ZoneManager::DoTouch(Widget* widget, double value)
+{
+    surface_->TouchChannel(widget->GetChannelNumber(), value);
+    
+    widget->LogInput(value);
+    
+    bool isUsed = false;
+    
+    if(focusedFXParamZone_ != nullptr && isFocusedFXParamMappingEnabled_)
+        focusedFXParamZone_->DoTouch(widget, widget->GetName(), isUsed, value);
+    
+    for(auto zone : focusedFXZones_)
+        zone->DoTouch(widget, widget->GetName(), isUsed, value);
+    
+    if(isUsed)
+        return;
+
+    for(auto zone : selectedTrackFXZones_)
+        zone->DoTouch(widget, widget->GetName(), isUsed, value);
+    
+    if(isUsed)
+        return;
+
+    for(auto zone : fxSlotZones_)
+        zone->DoTouch(widget, widget->GetName(), isUsed, value);
+    
+    if(isUsed)
+        return;
+
+    if(homeZone_ != nullptr)
+        homeZone_->DoTouch(widget, widget->GetName(), isUsed, value);
 }
 
 Navigator* ZoneManager::GetMasterTrackNavigator() { return surface_->GetPage()->GetMasterTrackNavigator(); }
@@ -3822,7 +3865,17 @@ OSC_ControlSurfaceIO::OSC_ControlSurfaceIO(string surfaceName, string receiveOnP
                 {
                     int value;
                     message->arg().popInt32(value);
-                    surface->ProcessOSCMessage(message->addressPattern(), value);
+                    
+                    if (surface->IsX32() && message->addressPattern() == "/-stat/selidx")
+                    {
+                        string x32Select = message->addressPattern() + '/';
+                        if (value < 10)
+                            x32Select += '0';
+                        x32Select += to_string(value);
+                        surface->ProcessOSCMessage(x32Select, 1.0);
+                    }
+                    else
+                        surface->ProcessOSCMessage(message->addressPattern(), value);
                 }
             }
         }

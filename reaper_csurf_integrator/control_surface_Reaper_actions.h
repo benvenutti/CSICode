@@ -1545,6 +1545,8 @@ public:
     
     virtual void Do(ActionContext* context, double value) override
     {
+        if(value == 0.0) return; // ignore button releases
+
         if(MediaTrack* track = context->GetTrack())
         {
             string name = "";
@@ -1689,13 +1691,15 @@ public:
     
     virtual void Do(ActionContext* context, double value) override
     {
+        if(value == 0.0) return; // ignore button releases
+
         if(MediaTrack* track = context->GetTrack())
         {
             string sendTrackName = "No Send Track";
             MediaTrack* destTrack = (MediaTrack *)DAW::GetSetTrackSendInfo(track, 0, context->GetSlotIndex() + DAW::GetTrackNumSends(track, 1), "P_DESTTRACK", 0);;
             if(destTrack)
                 sendTrackName = (char *)DAW::GetSetMediaTrackInfo(destTrack, "P_NAME", NULL);
-            TheManager->Speak(sendTrackName);
+            TheManager->Speak("Track " + to_string(context->GetPage()->GetIdFromTrack(destTrack)) + " " + string(sendTrackName));
         }
     }
 };
@@ -1828,13 +1832,15 @@ public:
     
     virtual void Do(ActionContext* context, double value) override
     {
+        if(value == 0.0) return; // ignore button releases
+
         if(MediaTrack* track = context->GetTrack())
         {
             MediaTrack* srcTrack = (MediaTrack *)DAW::GetSetTrackSendInfo(track, -1, context->GetSlotIndex(), "P_SRCTRACK", 0);
             if(srcTrack)
             {
                 string receiveTrackName = (char *)DAW::GetSetMediaTrackInfo(srcTrack, "P_NAME", NULL);
-                TheManager->Speak(receiveTrackName);
+                TheManager->Speak("Track " + to_string(context->GetPage()->GetIdFromTrack(srcTrack)) + " " + receiveTrackName);
             }
             else
                 TheManager->Speak("No Receive Track");
