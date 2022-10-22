@@ -3125,29 +3125,52 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class MetronomeVolume1Display : public Action
+class MetronomeVolumeDisplay : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
-public:
-    virtual string GetName() override { return "MetronomeVolume1Display"; }
+    // Should write to the provided argument the metronome volume (in linear factor). Returns true
+    // if the call was sucessful, false otherwise.
+    virtual bool GetVolume(double& value) const = 0;
 
-    virtual void RequestUpdate(ActionContext* context) override
+    void RequestUpdate(ActionContext* context) override final
     {
-        if (const double* volume = TheManager->GetMetronomeVolume1Ptr())
-        {
-            const auto result = VAL2DB(*volume);
+        double volume = 0.0;
 
-            if (result < -120)
+        if (GetVolume(volume))
+        {
+            // The min value Reaper (as of v6.68) shows for the metronome volume before displaying "-inf".
+            constexpr double reaperMinMetronomeVolumeInDb = -135.0;
+
+            // String formatters for one or two decimal digits.
+            constexpr auto oneDecDigitFormatter = "%7.1lf";
+            constexpr auto twoDecDigitsFormatter = "%7.2lf";
+
+            const auto stringArgument = context->GetStringParam();
+            const auto hasPrefix = !stringArgument.empty();
+            const auto prefix = hasPrefix ? stringArgument.front() : ' ';
+
+            const auto volumeInDb = VAL2DB(volume);
+
+            char str[128];
+
+            if (volumeInDb < reaperMinMetronomeVolumeInDb)
             {
-                context->UpdateWidgetValue("P  -inf");
+                snprintf(str, sizeof(str), "   -inf");
             }
             else
             {
-                char trackVolume[128];
-                snprintf(trackVolume, sizeof(trackVolume), "%7.1lf", result);
-                trackVolume[0] = 'P';
-                context->UpdateWidgetValue(string(trackVolume));
+                // If there is a prefix, we reduce the number of decimal digits when the volume is smaller
+                // or equal to -10.0. This is to accomodate the prefix and the volume better on the display.
+                snprintf(str, sizeof(str),
+                         hasPrefix && volumeInDb <= -10.0 ? oneDecDigitFormatter : twoDecDigitsFormatter, volumeInDb);
             }
+
+            if (hasPrefix)
+            {
+                str[0] = prefix;
+            }
+
+            context->UpdateWidgetValue(string(str));
         }
         else
         {
@@ -3157,37 +3180,45 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class MetronomeVolume2Display : public Action
+class MetronomeVolume1Display : public MetronomeVolumeDisplay
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual string GetName() override { return "MetronomeVolume2Display"; }
-    
-    virtual void RequestUpdate(ActionContext* context) override
+    string GetName() override { return "MetronomeVolume1Display"; }
+
+    bool GetVolume(double& value) const override
+    {
+        if (const double* volume = TheManager->GetMetronomeVolume1Ptr())
+        {
+            value = *volume;
+
+            return true;
+        }
+
+        return false;
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MetronomeVolume2Display : public MetronomeVolumeDisplay
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    string GetName() override { return "MetronomeVolume2Display"; }
+
+    bool GetVolume(double& value) const override
     {
         const auto* volume1 = TheManager->GetMetronomeVolume1Ptr();
         const auto* volume2 = TheManager->GetMetronomeVolume2Ptr();
 
         if (volume1 && volume2)
         {
-            const auto result = VAL2DB((*volume2) / (*volume1));
+            return value = (*volume2) / (*volume1);
 
-            if (result < -120)
-            {
-                context->UpdateWidgetValue("S  -inf");
-            }
-            else
-            {
-                char trackVolume[128];
-                snprintf(trackVolume, sizeof(trackVolume), "%7.1lf", result);
-                trackVolume[0] = 'S';
-                context->UpdateWidgetValue(string(trackVolume));
-            }
+            return true;
         }
-        else
-        {
-            context->ClearWidget();
-        }
+
+        return false;
     }
 };
 
@@ -3196,9 +3227,9 @@ class MetronomeVolume1 : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual string GetName() override { return "MetronomeVolume1"; }
+    string GetName() override { return "MetronomeVolume1"; }
 
-    virtual double GetCurrentNormalizedValue(ActionContext*) override
+    double GetCurrentNormalizedValue(ActionContext*) override
     {
         if (const double* volume = TheManager->GetMetronomeVolume1Ptr())
         {
@@ -3210,17 +3241,13 @@ public:
         }
     }
 
-    virtual void RequestUpdate(ActionContext* context) override
+    void RequestUpdate(ActionContext* context) override
     {
         context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
     }
     
-    virtual void Do(ActionContext*, double value) override
+    void Do(ActionContext*, double value) override
     {
-        // value is normalized fader position
-        // linear volume: 0dB is 1.0
-        // volToNormalized: linear to fader position
-        // normalizedToVol: fader position to linear
         double* volume1 = TheManager->GetMetronomeVolume1Ptr();
         double* volume2 = TheManager->GetMetronomeVolume2Ptr();
 
@@ -3242,9 +3269,9 @@ class MetronomeVolume2 : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual string GetName() override { return "MetronomeVolume2"; }
+    string GetName() override { return "MetronomeVolume2"; }
 
-    virtual double GetCurrentNormalizedValue(ActionContext*) override
+    double GetCurrentNormalizedValue(ActionContext*) override
     {
         const auto* volume1 = TheManager->GetMetronomeVolume1Ptr();
         const auto* volume2 = TheManager->GetMetronomeVolume2Ptr();
@@ -3259,12 +3286,12 @@ public:
         }
     }
  
-    virtual void RequestUpdate(ActionContext* context) override
+    void RequestUpdate(ActionContext* context) override
     {
         context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
     }
 
-    virtual void Do(ActionContext* context, double value) override
+    void Do(ActionContext*, double value) override
     {
         const auto* volume1 = TheManager->GetMetronomeVolume1Ptr();
         auto* volume2 = TheManager->GetMetronomeVolume2Ptr();
