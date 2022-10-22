@@ -3122,7 +3122,9 @@ private:
     int *measOffsPtr_ = nullptr;
     double *timeOffsPtr_ = nullptr;
     int *projectPanModePtr_ = nullptr;
-    
+    double *projectMetronomeVolume1Ptr_ = nullptr;
+    double *projectMetronomeVolume2Ptr_ = nullptr;
+
     void InitActionsDictionary();
 
     double GetPrivateProfileDouble(string key)
@@ -3155,7 +3157,10 @@ public:
         
         index = projectconfig_var_getoffs("panmode", &size);
         projectPanModePtr_ = (int*)projectconfig_var_addr(nullptr, index);
-        
+
+        projectMetronomeVolume1Ptr_ = (double *)get_config_var("projmetrov1", &size);
+        projectMetronomeVolume2Ptr_ = (double *)get_config_var("projmetrov2", &size);
+
         //GenerateX32SurfaceFile();
     }
     
@@ -3211,7 +3216,9 @@ public:
     int *GetMeasOffsPtr() { return measOffsPtr_; }
     double *GetTimeOffsPtr() { return timeOffsPtr_; }
     int GetProjectPanMode() { return *projectPanModePtr_; }
-   
+    double *GetMetronomeVolume1Ptr() { return projectMetronomeVolume1Ptr_; }
+    double *GetMetronomeVolume2Ptr() { return projectMetronomeVolume2Ptr_; }
+
     void Speak(string phrase)
     {
         const void (*osara_outputMessage)(const char* message) = nullptr;

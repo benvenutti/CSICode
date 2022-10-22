@@ -9,6 +9,8 @@
 
 #include "control_surface_action_contexts.h"
 
+#include <sstream>
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class FXParam : public FXAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3113,6 +3115,158 @@ public:
         }
         else
             context->ClearWidget();
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MetronomeVolume1Display : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual string GetName() override { return "MetronomeVolume1Display"; }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if (const double* volume = TheManager->GetMetronomeVolume1Ptr())
+        {
+            const auto result = VAL2DB(*volume);
+
+            if (result < -120)
+            {
+                context->UpdateWidgetValue("P  -inf");
+            }
+            else
+            {
+                char trackVolume[128];
+                snprintf(trackVolume, sizeof(trackVolume), "%7.1lf", result);
+                trackVolume[0] = 'P';
+                context->UpdateWidgetValue(string(trackVolume));
+            }
+        }
+        else
+        {
+            context->ClearWidget();
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MetronomeVolume2Display : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual string GetName() override { return "MetronomeVolume2Display"; }
+    
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        const auto* volume1 = TheManager->GetMetronomeVolume1Ptr();
+        const auto* volume2 = TheManager->GetMetronomeVolume2Ptr();
+
+        if (volume1 && volume2)
+        {
+            const auto result = VAL2DB((*volume2) / (*volume1));
+
+            if (result < -120)
+            {
+                context->UpdateWidgetValue("S  -inf");
+            }
+            else
+            {
+                char trackVolume[128];
+                snprintf(trackVolume, sizeof(trackVolume), "%7.1lf", result);
+                trackVolume[0] = 'S';
+                context->UpdateWidgetValue(string(trackVolume));
+            }
+        }
+        else
+        {
+            context->ClearWidget();
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MetronomeVolume1 : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual string GetName() override { return "MetronomeVolume1"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext*) override
+    {
+        if (const double* volume = TheManager->GetMetronomeVolume1Ptr())
+        {
+            return volToNormalized(*volume);
+        }
+        else
+        {
+            return 0.0;
+        }
+    }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
+    }
+    
+    virtual void Do(ActionContext*, double value) override
+    {
+        // value is normalized fader position
+        // linear volume: 0dB is 1.0
+        // volToNormalized: linear to fader position
+        // normalizedToVol: fader position to linear
+        double* volume1 = TheManager->GetMetronomeVolume1Ptr();
+        double* volume2 = TheManager->GetMetronomeVolume2Ptr();
+
+        if (volume1 && volume2)
+        {
+            const auto oldVolume1 = *volume1;
+            const auto oldVolume2 = *volume2;
+
+            const auto normalizedValue = normalizedToVol(value);
+
+            *volume1 = normalizedValue;
+            *volume2 = normalizedValue * (oldVolume2 / oldVolume1);
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MetronomeVolume2 : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual string GetName() override { return "MetronomeVolume2"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext*) override
+    {
+        const auto* volume1 = TheManager->GetMetronomeVolume1Ptr();
+        const auto* volume2 = TheManager->GetMetronomeVolume2Ptr();
+
+        if (volume1 && volume2)
+        {            
+            return volToNormalized((*volume2) / (*volume1));
+        }
+        else
+        {
+            return 0.0;
+        }
+    }
+ 
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        const auto* volume1 = TheManager->GetMetronomeVolume1Ptr();
+        auto* volume2 = TheManager->GetMetronomeVolume2Ptr();
+
+        if (volume1 && volume2)
+        {
+            *volume2 = normalizedToVol(value) * (*volume1);
+        }
     }
 };
 

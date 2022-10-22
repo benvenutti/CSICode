@@ -1711,6 +1711,10 @@ void Manager::InitActionsDictionary()
     actions_["TrackReceiveVolumeDisplay"] =         new TrackReceiveVolumeDisplay();
     actions_["TrackReceivePanDisplay"] =            new TrackReceivePanDisplay();
     actions_["TrackReceivePrePostDisplay"] =        new TrackReceivePrePostDisplay();
+    actions_["MetronomeVolume1Display"] =           new MetronomeVolume1Display();
+    actions_["MetronomeVolume2Display"] =           new MetronomeVolume2Display();
+    actions_["MetronomeVolume1"] =                  new MetronomeVolume1();
+    actions_["MetronomeVolume2"] =                  new MetronomeVolume2();
 }
 
 void Manager::Init()
