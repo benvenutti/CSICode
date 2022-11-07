@@ -140,22 +140,13 @@ public:
         {
             //I_FXEN : fx enabled, 0=bypassed, !0=fx active
             if(DAW::GetMediaTrackInfo_Value(track, "I_FXEN") == 0)
-            {
                 context->UpdateWidgetValue(0.0);
-                context->UpdateWidgetValue("Bypassed");
-            }
             else if(DAW::TrackFX_GetCount(track) > context->GetSlotIndex())
             {
                 if(DAW::TrackFX_GetEnabled(track, context->GetSlotIndex()))
-                {
                     context->UpdateWidgetValue(1.0);
-                    context->UpdateWidgetValue("Enabled");
-                }
                 else
-                {
                     context->UpdateWidgetValue(0.0);
-                    context->UpdateWidgetValue("Bypassed");
-                }
             }
             else
                 context->ClearWidget();
@@ -174,6 +165,35 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class FXBypassDisplay : public FXAction
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual string GetName() override { return "FXBypassDisplay"; }
+   
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if(MediaTrack* track = context->GetTrack())
+        {
+            //I_FXEN : fx enabled, 0=bypassed, !0=fx active
+            if(DAW::GetMediaTrackInfo_Value(track, "I_FXEN") == 0)
+                context->UpdateWidgetValue("Bypassed");
+            else if(DAW::TrackFX_GetCount(track) > context->GetSlotIndex())
+            {
+                if(DAW::TrackFX_GetEnabled(track, context->GetSlotIndex()))
+                    context->UpdateWidgetValue("Enabled");
+                else
+                    context->UpdateWidgetValue("Bypassed");
+            }
+            else
+                context->ClearWidget();
+        }
+        else
+            context->ClearWidget();
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class ToggleFXOffline : public FXAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
@@ -187,15 +207,9 @@ public:
             if(DAW::TrackFX_GetCount(track) > context->GetSlotIndex())
             {
                 if(DAW::TrackFX_GetOffline(track, context->GetSlotIndex()))
-                {
                     context->UpdateWidgetValue(0.0);
-                    context->UpdateWidgetValue("Offline");
-                }
                 else
-                {
                     context->UpdateWidgetValue(1.0);
-                    context->UpdateWidgetValue("Online");
-                }
             }
             else
                 context->ClearWidget();
@@ -210,6 +224,32 @@ public:
 
         if(MediaTrack* track = context->GetTrack())
             DAW::TrackFX_SetOffline(track, context->GetSlotIndex(), ! DAW::TrackFX_GetOffline(track, context->GetSlotIndex()));
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class FXOfflineDisplay : public FXAction
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual string GetName() override { return "FXOfflineDisplay"; }
+   
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if(MediaTrack* track = context->GetTrack())
+        {
+            if(DAW::TrackFX_GetCount(track) > context->GetSlotIndex())
+            {
+                if(DAW::TrackFX_GetOffline(track, context->GetSlotIndex()))
+                    context->UpdateWidgetValue("Offline");
+                else
+                    context->UpdateWidgetValue("Online");
+            }
+            else
+                context->ClearWidget();
+        }
+        else
+            context->ClearWidget();
     }
 };
 
@@ -2866,7 +2906,7 @@ class TrackFolderParentDisplay : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual string GetName() override { return "TrackAutoModeDisplay"; }
+    virtual string GetName() override { return "TrackFolderParentDisplay"; }
     
     virtual void RequestUpdate(ActionContext* context) override
     {
@@ -2972,11 +3012,15 @@ public:
         else if(tmode > 0)
         {
             int num_measures=0;
-            double beats=DAW::TimeMap2_timeToBeats(NULL, pp, &num_measures, NULL, NULL, NULL) + 0.000000000001;
+            int currentTimeSignatureNumerator=0;
+            double beats=DAW::TimeMap2_timeToBeats(NULL,pp,&num_measures,&currentTimeSignatureNumerator,NULL,NULL)+ 0.000000000001;
             double nbeats = floor(beats);
             
             beats -= nbeats;
-                        
+               
+            if (num_measures <= 0 && pp < 0.0)
+                --num_measures;
+            
             int *measptr = TheManager->GetMeasOffsPtr();
           
             timeStr = to_string(num_measures+1+(measptr ? *measptr : 0)) + " " + to_string((int)(nbeats + 1)) + " ";

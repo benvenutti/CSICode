@@ -760,11 +760,8 @@ static void ProcessFXZoneFile(string filePath, ZoneManager* zoneManager, vector<
                         {
                             zone->AddWidget(nameDisplays[i][j]);
                             shared_ptr<ActionContext> context = nullptr;
-                            
-                            if(paramNumber == -1)
-                                context = TheManager->GetActionContext("FixedTextDisplay", nameDisplays[i][j], zone, "");
-                            else
-                                context = TheManager->GetActionContext("FixedTextDisplay", nameDisplays[i][j], zone, names[i][j]);
+
+                            context = TheManager->GetActionContext("FixedTextDisplay", nameDisplays[i][j], zone, names[i][j]);
                             
                             zone->AddActionContext(nameDisplays[i][j], 0, context);
                         }
@@ -1680,9 +1677,9 @@ void Manager::InitActionsDictionary()
     actions_["FXParam"] =                           new FXParam();
     actions_["FXParamRelative"] =                   new FXParamRelative();
     actions_["ToggleFXBypass"] =                    new ToggleFXBypass();
-    actions_["FXBypassDisplay"] =                   new ToggleFXBypass();
+    actions_["FXBypassDisplay"] =                   new FXBypassDisplay();
     actions_["ToggleFXOffline"] =                   new ToggleFXOffline();
-    actions_["FXOfflineDisplay"] =                  new ToggleFXOffline();
+    actions_["FXOfflineDisplay"] =                  new FXOfflineDisplay();
     actions_["FXNameDisplay"] =                     new FXNameDisplay();
     actions_["FXMenuNameDisplay"] =                 new FXMenuNameDisplay();
     actions_["SpeakFXMenuName"] =                   new SpeakFXMenuName();
@@ -2412,6 +2409,9 @@ void Zone::GoAssociatedZone(string zoneName)
     {
         for(auto zone : associatedZones_[zoneName])
             zone->Deactivate();
+        
+        zoneManager_->GoHome();
+        
         return;
     }
     
@@ -2462,10 +2462,7 @@ void Zone::Activate()
     isActive_ = true;
     
     zoneManager_->GetSurface()->SendOSCMessage(GetName());
-    
-    for(auto zone : includedZones_)
-        zone->Activate();
-   
+       
     for(auto [key, zones] : associatedZones_)
         for(auto zone : zones)
             zone->Deactivate();
@@ -2473,6 +2470,9 @@ void Zone::Activate()
     for(auto [key, zones] : subZones_)
         for(auto zone : zones)
             zone->Deactivate();
+    
+    for(auto zone : includedZones_)
+        zone->Activate();
 }
 
 void Zone::GoTrack()
@@ -2885,9 +2885,38 @@ void OSC_FeedbackProcessor::SetColorValue(rgba_color color)
 {
     if(lastColor_ != color)
     {
-        lastColor_ = color;
-        surface_->SendOSCMessage(this, oscAddress_ + "/Color", color.to_string());
+        if(lastColor_ != color)
+        {
+            lastColor_ = color;
+
+            if (surface_->IsX32())
+                X32SetColorValue(color);
+            else
+                surface_->SendOSCMessage(this, oscAddress_ + "/Color", color.to_string());
+        }
     }
+}
+
+void OSC_FeedbackProcessor::X32SetColorValue(rgba_color color)
+{
+    int surfaceColor = 0;
+    int r = color.r;
+    int g = color.g;
+    int b = color.b;
+
+    if (r == 64 && g == 64 && b == 64)                               surfaceColor = 8;    // BLACK
+    else if (r > g && r > b)                                         surfaceColor = 1;    // RED
+    else if (g > r && g > b)                                         surfaceColor = 2;    // GREEN
+    else if (abs(r - g) < 30 && r > b && g > b)                      surfaceColor = 3;    // YELLOW
+    else if (b > r && b > g)                                         surfaceColor = 4;    // BLUE
+    else if (abs(r - b) < 30 && r > g && b > g)                      surfaceColor = 5;    // MAGENTA
+    else if (abs(g - b) < 30 && g > r && b > r)                      surfaceColor = 6;    // CYAN
+    else if (abs(r - g) < 30 && abs(r - b) < 30 && abs(g - b) < 30)  surfaceColor = 7;    // WHITE
+
+    string oscAddress = "/ch/";
+    if (widget_->GetChannelNumber() < 10)   oscAddress += '0';
+    oscAddress += to_string(widget_->GetChannelNumber()) + "/config/color";
+    surface_->SendOSCMessage(this, oscAddress, surfaceColor);
 }
 
 void OSC_FeedbackProcessor::ForceValue(double value)
@@ -2909,8 +2938,11 @@ void OSC_IntFeedbackProcessor::ForceValue(double value)
 {
     lastDoubleValue_ = value;
     
-    if (surface_->IsX32() && oscAddress_.find("/-stat/selidx") != string::npos && value != 0.0)
-        surface_->SendOSCMessage(this, "/-stat/selidx", widget_->GetChannelNumber() - 1);
+    if (surface_->IsX32() && oscAddress_.find("/-stat/selidx") != string::npos)
+    {
+        if (value != 0.0)
+            surface_->SendOSCMessage(this, "/-stat/selidx", widget_->GetChannelNumber() - 1);
+    }
     else
         surface_->SendOSCMessage(this, oscAddress_, (int)value);
 }
